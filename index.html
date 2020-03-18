@@ -144,6 +144,59 @@
           JSON.stringify(returnMessage)
         );
       };
+
+      const ImageLoaderWorker = new Worker("image-loader.worker.js");
+      let BlockNationCache = [];
+      LoadImgWebWorker = function(msgInComming) {
+        let message = JSON.parse(msgInComming);
+        ImageLoaderWorker.postMessage(message.text);
+        // ImageLoaderWorker.addEventListener("message", event => {
+        //   const imageData = event.data;
+        //   console.log("We got a message back!", imageData);
+        //   compress(imageData.data, 200, base64Data => {
+        //     let startDataIndex = base64Data.indexOf("base64,") + 7;
+        //     let returnMessage = {
+        //       id: message.id,
+        //       text: "Downloaded"
+        //     };
+        //     var returnMessageString = JSON.stringify(returnMessage);
+        //     BlockNationCache[message.text] = base64Data.substr(startDataIndex);
+        //     console.log(returnMessage);
+        //     unityInstance.SendMessage(
+        //       "MAIN",
+        //       "ResponseFromBrowser",
+        //       returnMessageString
+        //     );
+        //   });
+        // });
+      };
+      function compress(base64Data, minWith, callBack) {
+        const width = minWith;
+        const img = new Image();
+        img.src = base64Data;
+        img.onload = () => {
+          const elem = document.createElement("canvas");
+          const scaleFactor = width / img.width;
+
+          elem.width = width;
+          elem.height = img.height * scaleFactor;
+          const ctx = elem.getContext("2d");
+          // img.width and img.height will contain the original dimensions
+          ctx.drawImage(img, 0, 0, width, img.height * scaleFactor);
+          ctx.canvas.toBlob(
+            blob => {
+              var readerDone = new FileReader();
+              readerDone.readAsDataURL(blob);
+              readerDone.onloadend = function() {
+                var base64dataDone = readerDone.result;
+                callBack(base64dataDone);
+              };
+            },
+            "image/png",
+            1
+          );
+        };
+      }
     </script>
   </head>
   <body>
