@@ -15,113 +15,113 @@
         { onProgress: UnityProgress }
       );
       //Magic code:
-      Sign = async function(text) {
+      Sign = async function (text) {
         let message = JSON.parse(text);
         if (typeof jet === "undefined") {
           let returnMessage = {
             id: message.id,
-            text: "ERROR: Please install JetStream wallet"
+            text: "ERROR: Please install JetStream wallet",
           };
           unityInstance.SendMessage(
-            "MAIN",
+            "BrowserConnect (Singleton)",
             "ResponseFromBrowser",
             JSON.stringify(returnMessage)
           );
         } else if (jet.klay.address != undefined) {
           let signed = await jet.klay
             .sign(message.text)
-            .on("cancelled", cancelled => {
+            .on("cancelled", (cancelled) => {
               let returnMessage = {
                 id: message.id,
-                text: "ERROR: User cancel"
+                text: "ERROR: User cancel",
               };
               unityInstance.SendMessage(
-                "MAIN",
+                "BrowserConnect (Singleton)",
                 "ResponseFromBrowser",
                 JSON.stringify(returnMessage)
               );
             });
           let returnMessage = { id: message.id, text: signed.signature };
           unityInstance.SendMessage(
-            "MAIN",
+            "BrowserConnect (Singleton)",
             "ResponseFromBrowser",
             JSON.stringify(returnMessage)
           );
         } else {
           let returnMessage = {
             id: message.id,
-            text: "ERROR: Please unlock wallet"
+            text: "ERROR: Please unlock wallet",
           };
           unityInstance.SendMessage(
-            "MAIN",
+            "BrowserConnect (Singleton)",
             "ResponseFromBrowser",
             JSON.stringify(returnMessage)
           );
         }
       };
-      GetRefCode = function(text) {
+      GetRefCode = function (text) {
         let message = JSON.parse(text);
         let ref = new URL(location.href).searchParams.get("ref");
         let returnMessage = { id: message.id, text: ref == null ? 0 : ref };
         unityInstance.SendMessage(
-          "MAIN",
+          "BrowserConnect (Singleton)",
           "ResponseFromBrowser",
           JSON.stringify(returnMessage)
         );
       };
-      GetStartLocation = function(text) {
+      GetStartLocation = function (text) {
         let message = JSON.parse(text);
         let loc = new URL(location.href).searchParams.get("location");
         let returnMessage = { id: message.id, text: loc == null ? "0:0" : loc };
         unityInstance.SendMessage(
-          "MAIN",
+          "BrowserConnect (Singleton)",
           "ResponseFromBrowser",
           JSON.stringify(returnMessage)
         );
       };
-      SignTransaction = function(text) {
+      SignTransaction = function (text) {
         let message = JSON.parse(text);
         let txData = JSON.parse(message.text);
         console.log(txData);
         let returnMessage = { id: message.id, text: "" };
         window.caver.klay
           .sendTransaction(txData)
-          .on("receipt", receipt => {
+          .on("receipt", (receipt) => {
             console.log(receipt);
             returnMessage.text = "SUCCESS";
             unityInstance.SendMessage(
-              "MAIN",
+              "BrowserConnect (Singleton)",
               "ResponseFromBrowser",
               JSON.stringify(returnMessage)
             );
           })
-          .on("error", error => {
+          .on("error", (error) => {
             console.log(error);
             returnMessage.text = "Error";
             unityInstance.SendMessage(
-              "MAIN",
+              "BrowserConnect (Singleton)",
               "ResponseFromBrowser",
               JSON.stringify(returnMessage)
             );
           })
-          .on("cancelled", cancelled => {
+          .on("cancelled", (cancelled) => {
             console.log(cancelled);
             returnMessage.text = "User cancel";
             unityInstance.SendMessage(
-              "MAIN",
+              "BrowserConnect (Singleton)",
               "ResponseFromBrowser",
               JSON.stringify(returnMessage)
             );
           });
       };
-      RequestPasteText = function(ID) {
+      RequestPasteText = function (ID) {
         var pastedtext = prompt(
           ID + "\nBlockNation.xyz\nPlease paste here:",
           ""
         );
         var pasteTempl = {
           id: ID,
-          text: pastedtext
+          text: pastedtext,
         };
         unityInstance.SendMessage(
           "PasteHelper",
@@ -129,79 +129,108 @@
           JSON.stringify(pasteTempl)
         );
       };
-      DetectJetStream = function(text) {
+      DetectJetStream = function (text) {
         let message = JSON.parse(text);
         let returnMessage = {
           id: message.id,
-          text: ""
+          text: "",
         };
         if (typeof jet === "undefined")
           returnMessage.text = "ERROR: Please install JetStream wallet";
         else returnMessage.text = "Installed";
         unityInstance.SendMessage(
-          "MAIN",
+          "BrowserConnect (Singleton)",
           "ResponseFromBrowser",
           JSON.stringify(returnMessage)
         );
       };
+      //Mutil player
+      let socket;
 
-      const ImageLoaderWorker = new Worker("image-loader.worker.js");
-      let BlockNationCache = [];
-      LoadImgWebWorker = function(msgInComming) {
-        let message = JSON.parse(msgInComming);
-        ImageLoaderWorker.postMessage(message.text);
-        // ImageLoaderWorker.addEventListener("message", event => {
-        //   const imageData = event.data;
-        //   console.log("We got a message back!", imageData);
-        //   compress(imageData.data, 200, base64Data => {
-        //     let startDataIndex = base64Data.indexOf("base64,") + 7;
-        //     let returnMessage = {
-        //       id: message.id,
-        //       text: "Downloaded"
-        //     };
-        //     var returnMessageString = JSON.stringify(returnMessage);
-        //     BlockNationCache[message.text] = base64Data.substr(startDataIndex);
-        //     console.log(returnMessage);
-        //     unityInstance.SendMessage(
-        //       "MAIN",
-        //       "ResponseFromBrowser",
-        //       returnMessageString
-        //     );
-        //   });
-        // });
+      MutilPlayerSendMessage = function (str) {
+        let msg = JSON.parse(str);
+        if (msg.text.startsWith("JOIN")) {
+          socket = new WebSocket("wss://blocknationchat.glitch.me/chat");
+          // Connection opened
+          socket.addEventListener("open", function (event) {
+            socket.send(msg.text);
+          });
+          socket.addEventListener("close", function (event) {
+            alert("Disconnected with chat server, another user don't see you anymore");
+          });
+          // Listen for messages
+          socket.addEventListener("message", function (event) {
+            console.log("Message from server ", event.data);
+
+            unityInstance.SendMessage(
+              "MutilPlayerManager",
+              "IncomeMessage",
+              event.data
+            );
+          });
+        } else {
+          if (socket) socket.send(msg.text);
+        }
       };
-      function compress(base64Data, minWith, callBack) {
-        const width = minWith;
-        const img = new Image();
-        img.src = base64Data;
-        img.onload = () => {
-          const elem = document.createElement("canvas");
-          const scaleFactor = width / img.width;
 
-          elem.width = width;
-          elem.height = img.height * scaleFactor;
-          const ctx = elem.getContext("2d");
-          // img.width and img.height will contain the original dimensions
-          ctx.drawImage(img, 0, 0, width, img.height * scaleFactor);
-          ctx.canvas.toBlob(
-            blob => {
-              var readerDone = new FileReader();
-              readerDone.readAsDataURL(blob);
-              readerDone.onloadend = function() {
-                var base64dataDone = readerDone.result;
-                callBack(base64dataDone);
-              };
-            },
-            "image/png",
-            1
-          );
-        };
-      }
+      //End-MutilPlayer
+      // const ImageLoaderWorker = new Worker("image-loader.worker.js");
+      // let BlockNationCache = [];
+      // LoadImgWebWorker = function(msgInComming) {
+      //   let message = JSON.parse(msgInComming);
+      //   ImageLoaderWorker.postMessage(message.text);
+      //   // ImageLoaderWorker.addEventListener("message", event => {
+      //   //   const imageData = event.data;
+      //   //   console.log("We got a message back!", imageData);
+      //   //   compress(imageData.data, 200, base64Data => {
+      //   //     let startDataIndex = base64Data.indexOf("base64,") + 7;
+      //   //     let returnMessage = {
+      //   //       id: message.id,
+      //   //       text: "Downloaded"
+      //   //     };
+      //   //     var returnMessageString = JSON.stringify(returnMessage);
+      //   //     BlockNationCache[message.text] = base64Data.substr(startDataIndex);
+      //   //     console.log(returnMessage);
+      //   //     unityInstance.SendMessage(
+      //   //       "BrowserConnect (Singleton)",
+      //   //       "ResponseFromBrowser",
+      //   //       returnMessageString
+      //   //     );
+      //   //   });
+      //   // });
+      // };
+      // function compress(base64Data, minWith, callBack) {
+      //   const width = minWith;
+      //   const img = new Image();
+      //   img.src = base64Data;
+      //   img.onload = () => {
+      //     const elem = document.createElement("canvas");
+      //     const scaleFactor = width / img.width;
+
+      //     elem.width = width;
+      //     elem.height = img.height * scaleFactor;
+      //     const ctx = elem.getContext("2d");
+      //     // img.width and img.height will contain the original dimensions
+      //     ctx.drawImage(img, 0, 0, width, img.height * scaleFactor);
+      //     ctx.canvas.toBlob(
+      //       blob => {
+      //         var readerDone = new FileReader();
+      //         readerDone.readAsDataURL(blob);
+      //         readerDone.onloadend = function() {
+      //           var base64dataDone = readerDone.result;
+      //           callBack(base64dataDone);
+      //         };
+      //       },
+      //       "image/png",
+      //       1
+      //     );
+      //   };
+      // }
     </script>
   </head>
   <body>
     <div class="webgl-content">
-      <div id="unityContainer" style="width: 100%; height: 100%"></div>
+      <div id="unityContainer" style="width: 100%; height: 100%;"></div>
     </div>
   </body>
 </html>
